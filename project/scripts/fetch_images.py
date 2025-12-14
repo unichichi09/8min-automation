@@ -120,7 +120,10 @@ def fetch_images_for_script(script_path=None, image_dir=None):
     matches = list(dict.fromkeys(matches))
     print(f"Found {len(matches)} image requests (Aoyama only).")
     
-    with DDGS() as ddgs:
+    # Session Management
+    ddgs = DDGS()
+
+    try:
         for keyword in matches:
             keyword = keyword.strip()
             if not keyword: continue
@@ -128,8 +131,8 @@ def fetch_images_for_script(script_path=None, image_dir=None):
             print(f"Searching for: {keyword}")
             
             found_image = False
-            # Retry loop for rate limits
-            max_retries = 3
+            # Exponential Backoff Retry Loop
+            max_retries = 4
             results = []
             
             for attempt in range(max_retries):
@@ -149,11 +152,23 @@ def fetch_images_for_script(script_path=None, image_dir=None):
                     break # Success
                 except Exception as e:
                     print(f"Search failed (attempt {attempt+1}): {e}")
-                    time.sleep(2 * (attempt + 1))
+                    
+                    # SMART REFRESH: Re-init session on error
+                    print("Refreshing DDGS session due to error...")
+                    try:
+                        ddgs = DDGS()
+                    except:
+                        pass
+                        
+                    # Exponential Backoff: 5 * (2^attempt)
+                    wait_time = 5 * (2 ** attempt)
+                    print(f"Waiting {wait_time}s...")
+                    time.sleep(wait_time)
             
             if not results:
-                print(f"Warning: Could not get results for {keyword} after retries. Trying fallback size...")
-                # Fallback to Medium if Large fails
+                # Last ditch effort with fallback size, using fresh session
+                print(f"Warning: Could not get results for {keyword} after retries. Refreshing session and trying fallback size...")
+                ddgs = DDGS()
                 try:
                     results = ddgs.images(
                         keyword, region="jp-jp", safesearch="off", size="Medium", 
@@ -196,9 +211,14 @@ def fetch_images_for_script(script_path=None, image_dir=None):
             if not found_image:
                 print(f"Warning: Could not find suitable image for {keyword}")
 
-            # Increased delay to avoid 403 Rate Limit (User Engineering Plan)
-            print("Waiting 15s to respect rate limits...")
-            time.sleep(15)
+            # Random jitter wait to look human (10-20s)
+            import random
+            sleep_time = random.uniform(10, 20)
+            print(f"Waiting {sleep_time:.1f}s to respect rate limits...")
+            time.sleep(sleep_time)
+            
+    except Exception as e:
+        print(f"Critical Error in fetch loop: {e}")
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:

@@ -492,6 +492,8 @@ def generate_video(script_path=None, output_path=None, image_dir=None, audio_dir
         base_bg_clip = VideoFileClip(bg_path)
     
     # Loop Segments
+    last_valid_aoyama_image = None
+    
     for i, seg in enumerate(segments):
         # Handle Eyecatch
         if seg.get("type") == "eyecatch":
@@ -538,10 +540,34 @@ def generate_video(script_path=None, output_path=None, image_dir=None, audio_dir
         
         bg_segment = bg_segment.with_duration(duration)
 
-        # Context Image
+        # Context Image (with Persistence)
         context_img = None
-        if seg['character'] == "青山龍星" and seg.get('image_keyword'):
-             context_img = get_image_clip(seg['image_keyword'], duration, custom_image_dir=target_image_dir)
+        
+        # Logic:
+        # 1. If [IMG: keyword] matches and exists -> New Image.
+        # 2. If [IMG: keyword] matches but MISSING -> Reuse Last Valid Image.
+        # 3. If no tag -> Reuse Last Valid Image (until scene change? No, current design is per-line persistence).
+        
+        target_keyword = seg.get('image_keyword')
+        
+        if seg['character'] == "青山龍星":
+            if target_keyword:
+                 # Try to get new image
+                 new_clip = get_image_clip(target_keyword, duration, custom_image_dir=target_image_dir)
+                 if new_clip:
+                     context_img = new_clip
+                     last_valid_aoyama_image = new_clip # Update persistence
+                 else:
+                     # Failed to find new image, fallback to persistence
+                     if last_valid_aoyama_image:
+                         context_img = last_valid_aoyama_image.with_duration(duration)
+            else:
+                 # No tag specified for this line, assume continuation of previous context
+                 if last_valid_aoyama_image:
+                     context_img = last_valid_aoyama_image.with_duration(duration)
+        
+        # If still no image (Start of video or massive failure), use fallback?
+        # Maybe Phase 4. For now, persistence covers most rate limit gaps.
 
         # Text Overlay
         char_color = CHARACTER_COLORS.get(seg['character'], CHARACTER_COLORS["default"])

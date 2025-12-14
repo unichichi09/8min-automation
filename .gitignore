@@ -1,0 +1,16 @@
+# System
+.DS_Store
+__pycache__/
+
+# Output
+*.mp4
+*.mp3
+*.wav
+
+# Project specific
+projects/*/output/
+projects/*/audio/
+projects/*/images/
+
+# Editor
+.vscode/

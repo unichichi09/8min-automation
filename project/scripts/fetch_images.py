@@ -78,10 +78,47 @@ def fetch_images_for_script(script_path=None, image_dir=None):
     with open(target_script, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    # Find all [IMG: keyword] tags
-    matches = re.findall(r'\[IMG:\s*(.*?)\]', content)
+    # Parse script to find [IMG] tags assigned ONLY to Aoyama Ryusei
+    matches = []
     
-    print(f"Found {len(matches)} image requests.")
+    lines = content.split('\n')
+    pending_keywords = []
+
+    for line in lines:
+        line = line.strip()
+        if not line: continue
+        
+        # 1. Check for IMG tag
+        img_match = re.match(r'\[IMG:\s*(.*?)\]', line)
+        if img_match:
+            keyword = img_match.group(1).strip()
+            if keyword:
+                pending_keywords.append(keyword)
+            continue
+            
+        # 2. Check for Character Line
+        if ',' in line and not line.startswith('['):
+            try:
+                parts = line.split(',', 1)
+                char_name = parts[0].strip()
+                
+                # Normalize name (simple check)
+                if "青山" in char_name:
+                    # If it's Aoyama, authorize the pending images
+                    matches.extend(pending_keywords)
+                else:
+                    # If it's anyone else, discard the images (Waste prevention)
+                    if pending_keywords:
+                        print(f"Skipping unused images for {char_name}: {pending_keywords}")
+                
+                # Reset pending
+                pending_keywords = []
+            except:
+                pass
+
+    # Unique list while preserving order
+    matches = list(dict.fromkeys(matches))
+    print(f"Found {len(matches)} image requests (Aoyama only).")
     
     with DDGS() as ddgs:
         for keyword in matches:

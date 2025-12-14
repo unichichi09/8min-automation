@@ -52,20 +52,96 @@ def normalize_text(text):
         r"習近平": "しゅうきんぺい",
     }
     
+    # 0. Clean Number Spacing & Commas (Crucial for Voicevox Counters)
+    # Fix "12,500" -> "12500"
+    text = re.sub(r'(\d{1,3}),(\d{3})', r'\1\2', text) # Simple 1,000 pattern
+    text = re.sub(r'(\d+),(\d+)', r'\1\2', text)       # Catch all digit,digit
+
+    # Fix "2025 年" -> "2025年" (Remove space between Number and Non-Space)
+    text = re.sub(r'(\d+)\s+([^\d\s])', r'\1\2', text)
+    
     # 3. Specific patterns
     # Fix "第2章" -> "だいにしょう" (User QA Request)
     text = re.sub(r"第([0-9０-９]+)章", r"だい\1しょう", text)
-    
+  
     processed_text = text
     
-    # Apply replacements
+    # 4. Apply replacements (Acronyms & Vocab FIRST)
+    # ...
     for pattern, reading in replacements.items():
         processed_text = re.sub(pattern, reading, processed_text, flags=re.IGNORECASE)
         
     for pattern, reading in vocab_replacements.items():
         processed_text = re.sub(pattern, reading, processed_text)
+
+    # 5. Number Conversion (REMOVED)
+    # Voicevox handles numbers natively now that spaces/commas are gone.
         
     return processed_text
+
+def convert_numbers_to_japanese(text):
+    """
+    Finds numeric sequences in text and converts them to Japanese reading.
+    e.g. "12万人" -> "じゅうに万人" -> Voicevox reads "じゅうにまんにん" corretly.
+    Simple implementation for integers.
+    """
+    def num2ja(num_str):
+        try:
+            n = int(num_str)
+        except:
+            return num_str
+            
+        if n == 0: return "ゼロ"
+        
+        digits = {0:"", 1:"いち", 2:"に", 3:"さん", 4:"よん", 5:"ご", 6:"ろく", 7:"なな", 8:"はち", 9:"きゅう"}
+        units = {10:"じゅう", 100:"ひゃく", 1000:"せん", 10000:"まん", 100000000:"おく"}
+        
+        # Simple recursive conversion for up to Oku
+        if n >= 100000000:
+            upper = n // 100000000
+            lower = n % 100000000
+            return num2ja(str(upper)) + "おく" + (num2ja(str(lower)) if lower > 0 else "")
+        elif n >= 10000:
+            upper = n // 10000
+            lower = n % 10000
+            return num2ja(str(upper)) + "まん" + (num2ja(str(lower)) if lower > 0 else "")
+            
+        # Below Man (10000)
+        s = ""
+        # Sen (1000)
+        thou = (n % 10000) // 1000
+        if thou == 1: s += "せん"
+        elif thou > 1: s += digits[thou] + "せん"
+        
+        # Hyaku (100)
+        hund = (n % 1000) // 100
+        if hund == 1: s += "ひゃく"
+        elif hund > 1: s += digits[hund] + "ひゃく"
+        
+        # Jyu (10)
+        ten = (n % 100) // 10
+        if ten == 1: s += "じゅう"
+        elif ten > 1: s += digits[ten] + "じゅう"
+        
+        # One (1)
+        one = n % 10
+        if one > 0:
+            s += digits[one]
+            
+        # Fixes for special readings
+        s = s.replace("さんひゃく", "さんびゃく")
+        s = s.replace("ろくひゃく", "ろっぴゃく")
+        s = s.replace("はちひゃく", "はっぴゃく")
+        s = s.replace("さんせん", "さんぜん")
+        s = s.replace("はちせん", "はっせん")
+        
+        return s
+
+    # Regex to find numbers
+    # Support commas (e.g. 12,500 -> 12500)
+    # Match digits followed optionally by (,digits) groups
+    return re.sub(r'\d+(?:,\d+)*', lambda m: num2ja(m.group(0).replace(',', '')), text)
+
 
 def check_voicevox_connection():
     try:

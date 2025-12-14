@@ -35,18 +35,28 @@ SUB_CONF = config["video"]["subtitle"]
 # Context Image Settings
 IMG_CONF = config["video"]["context_image"]
 
-# Character Colors
+# Character Colors (Vivid & Distinct)
 CHARACTER_COLORS = {
     "青山龍星": "white",
-    "ずんだもん": "#39c263", 
-    "四国めたん": "#ff3399", 
-    "春日部つむぎ": "#ffcc00", 
-    "雨晴はう": "#66ccff", 
-    "冥鳴ひまり": "#9966ff", 
-    "玄野武宏": "#ff3333", 
-    "麒ヶ島宗麟": "#ff9933", 
-    "default": "white"
+    "ずんだもん": "#39c263",   # Zunda Green
+    "四国めたん": "#ff3399",   # Metan Pink
+    "春日部つむぎ": "#ffcc00", # Tsumugi Yellow
+    "雨晴はう": "#66ccff",     # Hau Blue
+    "冥鳴ひまり": "#9966ff",   # Himari Purple
+    "玄野武宏": "#ff3333",     # Kurono Red
+    "麒ヶ島宗麟": "#ff9933",   # Sorin Orange
+    "default": "#cccccc"       # Default Grey
 }
+
+def normalize_character_name(name):
+    """Normalizes character names to standard full names."""
+    name = name.strip()
+    if "ずんだ" in name: return "ずんだもん"
+    if "めたん" in name: return "四国めたん"
+    if "つむぎ" in name: return "春日部つむぎ"
+    if "青山" in name: return "青山龍星"
+    if "宗麟" in name: return "麒ヶ島宗麟"
+    return name
 
 # --- Helper Functions ---
 
@@ -93,7 +103,7 @@ def parse_script(filepath):
         
         try:
             parts = line.split(',', 1)
-            char_name = parts[0].strip()
+            char_name = normalize_character_name(parts[0].strip()) # Normalize here
             raw_text = parts[1].strip()
             
             # --- SAFETY NET: Auto-convert （ ） to { } for readings ---
@@ -336,8 +346,30 @@ def create_panel_image(text, character_name, char_color_hex, size=SCREEN_SIZE):
         h = char_color_hex.lstrip('#')
         border_rgb = tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
     except:
-        border_rgb = (255, 105, 180) # Default Pink
-    
+        # If color name "white", handle it
+        if char_color_hex.lower() == "white":
+             border_rgb = (255, 255, 255)
+        else:
+             border_rgb = (255, 105, 180) # Default Pink
+
+    # Custom Logic for Aoyama (Dark Panel, White Text, BOTTOM position)
+    if character_name == "青山龍星":
+        panel_bg_color = (30, 30, 30, 230) # Dark semitransparent
+        text_color = "white"
+        
+        # Position at BOTTOM to show images
+        # Similar to original create_text_image logic
+        bottom_margin = 50 # Hardcoded or readable from config if passed
+        panel_y = size[1] - panel_h - bottom_margin
+        
+    else:
+        # Others: Keep Center (Existing behavior)
+        panel_bg_color = (255, 255, 255, 255) # White Opaque
+        text_color = "black"
+        # Center Y
+        panel_y = (size[1] - panel_h) // 2
+
+
     # 2. Dynamic Font Sizing Loop
     font_size = 90 # Start slightly larger, reduce down
     min_font_size = 40
@@ -390,13 +422,24 @@ def create_panel_image(text, character_name, char_color_hex, size=SCREEN_SIZE):
     img_final = Image.new('RGBA', size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img_final)
     
+    # RE-CALCULATE Height/Position for Aoyama (Dynamic Fit)
+    # The loop ensured it FITS in max panel_h (650), but we don't want to USE all 650 if text is short.
+    if character_name == "青山龍星":
+        line_h_final = final_font.size * 1.5
+        total_text_h_final = len(final_lines) * line_h_final
+        # Add padding (top/bottom)
+        dynamic_h = int(total_text_h_final + 80) 
+        panel_h = max(200, dynamic_h) # Minimum 200px
+        
+        # Re-calc Y for bottom alignment
+        bottom_margin = 50
+        panel_y = size[1] - panel_h - bottom_margin
+        
     # Draw Panel
-    bg_color = (255, 255, 255, 255)
     border_width = 15
-    draw.rectangle([panel_x, panel_y, panel_x+panel_w, panel_y+panel_h], fill=bg_color, outline=border_rgb, width=border_width)
+    draw.rectangle([panel_x, panel_y, panel_x+panel_w, panel_y+panel_h], fill=panel_bg_color, outline=border_rgb, width=border_width)
     
     # Draw Text
-    text_color = "black"
     line_h = final_font.size * 1.5
     total_text_h = len(final_lines) * line_h
     start_text_y = panel_y + (panel_h - total_text_h) / 2
@@ -502,10 +545,8 @@ def generate_video(script_path=None, output_path=None, image_dir=None, audio_dir
 
         # Text Overlay
         char_color = CHARACTER_COLORS.get(seg['character'], CHARACTER_COLORS["default"])
-        if seg['character'] == "青山龍星": 
-            img_arr = create_text_image(seg['text'], color=char_color)
-        else: 
-            img_arr = create_panel_image(seg['text'], seg['character'], char_color)
+        # UNIFIED PANEL LOGIC: Now everyone uses Panel Image.
+        img_arr = create_panel_image(seg['text'], seg['character'], char_color)
             
         txt_clip = ImageClip(img_arr).with_duration(duration)
         

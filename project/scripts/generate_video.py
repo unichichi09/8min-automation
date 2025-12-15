@@ -9,7 +9,9 @@ from PIL import Image, ImageFont, ImageDraw
 import generate_audio
 
 # --- Config Loading ---
-CONFIG_PATH = "../config.json"
+# --- Config Loading ---
+current_dir = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.path.join(current_dir, "../config.json")
 try:
     with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
         config = json.load(f)
@@ -18,11 +20,14 @@ except FileNotFoundError:
     exit(1)
 
 # --- Paths & Constants ---
-IMAGE_DIR = config["paths"]["image_dir"] # Default, overridden by args
-BG_VIDEO_DIR = config["paths"]["background_video_dir"]
-BGM_FILE = config["paths"]["bgm_path"]
-EYECATCH_FILE = config["paths"].get("eyecatch_path", "../assets/videos/eyecatch.mp4")
-FONT_PATH = config["paths"]["font_path"]
+def resolve_path(path):
+    return os.path.abspath(os.path.join(current_dir, path))
+
+IMAGE_DIR = resolve_path(config["paths"]["image_dir"])
+BG_VIDEO_DIR = resolve_path(config["paths"]["background_video_dir"])
+BGM_FILE = resolve_path(config["paths"]["bgm_path"])
+EYECATCH_FILE = resolve_path(config["paths"].get("eyecatch_path", "../assets/videos/eyecatch.mp4"))
+FONT_PATH = resolve_path(config["paths"]["font_path"])
 
 # Video Settings
 SCREEN_SIZE = tuple(config["video"]["resolution"])
@@ -189,11 +194,6 @@ def get_image_clip(keyword, duration, custom_image_dir=None):
             # Simplified: Just resize and place
             final = img_clip.resized(width=target_w) # Force width
             final = final.with_position((pos_x, pos_y))
-            
-            # Add Stroke (Composite with larger white rect behind? or just simple)
-            # For phase 6 visual polish, we want a stroke.
-            # Let's add a white margin effect if possible, but keep it simple for stability.
-            
             return final
         except Exception as e:
             print(f"Error loading image {path}: {e}")
@@ -494,6 +494,30 @@ def generate_video(script_path=None, output_path=None, image_dir=None, audio_dir
     # Loop Segments
     last_valid_aoyama_image = None
     
+    # Default Fallback Image (Stabilization)
+    # Correct path: project/assets/backgrounds/default_news_bg.jpg
+    # current_dir is scripts dir. assets is ../assets
+    DEFAULT_BG_PATH = os.path.join(current_dir, "../assets/backgrounds/default_news_bg.jpg")
+    
+    if not os.path.exists(DEFAULT_BG_PATH):
+         # Try to find any jpg in images dir as emergency fallback
+         fallback_candidates = [f for f in os.listdir(target_image_dir) if f.endswith(".jpg")]
+         if fallback_candidates:
+             DEFAULT_BG_PATH = os.path.join(target_image_dir, fallback_candidates[0])
+
+    if os.path.exists(DEFAULT_BG_PATH):
+        try:
+            print(f"Loading Default Background: {DEFAULT_BG_PATH}")
+            # Load and crop/resize to screen
+            last_valid_aoyama_image = ImageClip(DEFAULT_BG_PATH).resized(width=SCREEN_SIZE[0]).with_position("center")
+            # Apply same styling as get_image_clip (resize to target ratio)
+            target_w = int(SCREEN_SIZE[0] * IMG_CONF["width_ratio"])
+            pos_x = IMG_CONF["position_x"]
+            pos_y = IMG_CONF["position_y"]
+            last_valid_aoyama_image = last_valid_aoyama_image.resized(width=target_w).with_position((pos_x, pos_y))
+        except Exception as e:
+            print(f"Warning: Failed to load default BG: {e}")
+
     for i, seg in enumerate(segments):
         # Handle Eyecatch
         if seg.get("type") == "eyecatch":
@@ -550,6 +574,11 @@ def generate_video(script_path=None, output_path=None, image_dir=None, audio_dir
         
         target_keyword = seg.get('image_keyword')
         
+        # 1. Default: Use Last Valid Image (Persistence)
+        if last_valid_aoyama_image:
+            context_img = last_valid_aoyama_image.with_duration(duration)
+        
+        # 2. Override if New Image Specified (Aoyama Only)
         if seg['character'] == "青山龍星":
             if target_keyword:
                  # Try to get new image
@@ -557,18 +586,7 @@ def generate_video(script_path=None, output_path=None, image_dir=None, audio_dir
                  if new_clip:
                      context_img = new_clip
                      last_valid_aoyama_image = new_clip # Update persistence
-                 else:
-                     # Failed to find new image, fallback to persistence
-                     if last_valid_aoyama_image:
-                         context_img = last_valid_aoyama_image.with_duration(duration)
-            else:
-                 # No tag specified for this line, assume continuation of previous context
-                 if last_valid_aoyama_image:
-                     context_img = last_valid_aoyama_image.with_duration(duration)
         
-        # If still no image (Start of video or massive failure), use fallback?
-        # Maybe Phase 4. For now, persistence covers most rate limit gaps.
-
         # Text Overlay
         char_color = CHARACTER_COLORS.get(seg['character'], CHARACTER_COLORS["default"])
         # UNIFIED PANEL LOGIC: Now everyone uses Panel Image.

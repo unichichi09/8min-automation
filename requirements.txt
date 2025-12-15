@@ -1,0 +1,7 @@
+moviepy
+numpy
+requests
+Pillow
+beautifulsoup4
+duckduckgo-search
+youtube-transcript-api

@@ -46,6 +46,14 @@ def test_visuals():
     img_green.save(os.path.join(output_dir, "test_panel_green.png"))
     print(f"Saved {output_dir}/test_panel_green.png")
 
+    # Test 1.6: Aoyama Panel (Dark Mode)
+    print("Generating Aoyama Panel...")
+    aoyama_text = "これは「未来への投資」という名目の、事実上の「国民総貧困化計画」なのです。"
+    panel_img_aoyama = create_panel_image(aoyama_text, "青山龍星", "white", size=SCREEN_SIZE)
+    img_ao = Image.fromarray(panel_img_aoyama)
+    img_ao.save(os.path.join(output_dir, "test_panel_aoyama.png"))
+    print(f"Saved {output_dir}/test_panel_aoyama.png")
+
     # Test 2: Subtitle Layout (Check Height)
     print("Generating Test Subtitle...")
     sub_text = "見ろ！この数字を。「高市内閣支持率 59.9%」！時事通信ですら認めざるを得ない、圧倒的な国民の支持だ！"

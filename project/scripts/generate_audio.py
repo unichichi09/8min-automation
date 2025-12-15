@@ -5,13 +5,17 @@ import time
 import re
 
 # Load Config
-CONFIG_PATH = "../config.json"
+# Load Config
+# Robust Path Finding
+current_dir = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.path.join(current_dir, "../config.json")
+
 with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
     config = json.load(f)
 
 # VOICEVOX Settings
 BASE_URL = config["audio"]["voicevox_url"]
-AUDIO_DIR = config["paths"]["audio_dir"]
+AUDIO_DIR = os.path.abspath(os.path.join(current_dir, config["paths"]["audio_dir"]))
 
 # Character to Speaker ID Mapping
 SPEAKER_MAP = config["audio"]["speakers"]

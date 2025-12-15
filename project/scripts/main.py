@@ -8,7 +8,9 @@ import generate_video
 import fetch_images
 
 # Load Config
-CONFIG_PATH = "../config.json"
+# Load Config
+current_dir = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.path.join(current_dir, "../config.json")
 try:
     with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
         config = json.load(f)
@@ -99,15 +101,45 @@ def run_project(project_name):
 
 def main():
     parser = argparse.ArgumentParser(description="Automated Video Generation - Project Manager")
-    parser.add_argument("action", choices=["new", "run"], help="Action: 'new' project or 'run' pipeline")
+    parser.add_argument("action", choices=["new", "run", "delete"], help="Action: 'new', 'run', or 'delete' project")
     parser.add_argument("project_name", help="Name of the project")
-    
+    parser.add_argument("--url", help="YouTube URL to source content from (for 'new' action)", default=None)
+
     args = parser.parse_args()
     
     if args.action == "new":
-        create_project(args.project_name)
+        dirs = create_project(args.project_name)
+        if args.url:
+            import fetch_transcript
+            print(f"Fetching transcript from {args.url}...")
+            transcript_path = os.path.join(dirs['script'], "source_transcript.txt")
+            fetch_transcript.fetch_transcript(args.url, transcript_path)
     elif args.action == "run":
         run_project(args.project_name)
+    elif args.action == "delete":
+        delete_project(args.project_name)
+
+def delete_project(project_name):
+    """Deletes the entire project directory."""
+    import shutil
+    base_dir = os.path.join(PROJECTS_ROOT, project_name)
+    
+    if not os.path.exists(base_dir):
+        print(f"Project '{project_name}' does not exist.")
+        return
+
+    print(f"WARNING: You are about to DELETE the entire project '{project_name}'.")
+    print(f"Path: {base_dir}")
+    choice = input("Are you sure you want to PERMANENTLY delete this project? (y/N): ").lower()
+    
+    if choice == 'y':
+        try:
+            shutil.rmtree(base_dir)
+            print(f"Project '{project_name}' has been deleted.")
+        except Exception as e:
+            print(f"Error deleting project: {e}")
+    else:
+        print("Deletion cancelled.")
 
 if __name__ == "__main__":
     main()

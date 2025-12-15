@@ -14,8 +14,9 @@ except ImportError:
     print("Please run: pip3 install duckduckgo-search")
     sys.exit(1)
 
-INPUT_SCRIPT = "../../youtube_script_long.md"
-IMAGE_DIR = "../assets/images"
+current_dir = os.path.dirname(os.path.abspath(__file__))
+INPUT_SCRIPT = os.path.join(current_dir, "../../youtube_script_long.md")
+IMAGE_DIR = os.path.join(current_dir, "../assets/images")
 
 # Ban list for domains (Japanese media, rights holders)
 BAN_DOMAINS = [
@@ -24,7 +25,10 @@ BAN_DOMAINS = [
     "nikkei.com", "asahi.com", "yomiuri.co.jp", "mainichi.jp",
     "yahoo.co.jp", "gettyimages", "istockphoto", "shutterstock", "adobe",
     "dailyshincho.jp", "friday.kodansha.co.jp", "gendai.media", "post.tv-asahi.co.jp",
-    "jprime.jp", "cyzo.com", "news-postseven.com", "j-cast.com", "sankei.com", "shujoprime.jp"
+    "jprime.jp", "cyzo.com", "news-postseven.com", "j-cast.com", "sankei.com", "shujoprime.jp",
+    # Stock Photo Sites (Watermark Risks)
+    "ac-illust.com", "photo-ac.com", "pixta.jp", "123rf", "aflo", "amanaimages", 
+    "fotolia", "dreamstime", "depositphotos", "vectorstock", "freepik", "vecteezy"
 ]
 
 def is_safe_url(url):
@@ -128,6 +132,13 @@ def fetch_images_for_script(script_path=None, image_dir=None):
             keyword = keyword.strip()
             if not keyword: continue
             
+            # Check if image already exists to skip search
+            safe_key_chk = re.sub(r'[\\/*?:"<>|]', "", keyword).replace(" ", "_") + ".jpg"
+            chk_path = os.path.join(target_dir, safe_key_chk)
+            if os.path.exists(chk_path):
+                print(f"Image already exists for {keyword}, skipping search.")
+                continue
+
             print(f"Searching for: {keyword}")
             
             found_image = False
@@ -138,7 +149,8 @@ def fetch_images_for_script(script_path=None, image_dir=None):
             for attempt in range(max_retries):
                 try:
                     # Add negative keywords to avoid stock/vectors
-                    safe_query = f"{keyword} -stock -watermark -vector -drawing -illustration -logo -text -sign -PRIME -週刊"
+                    # Removed -イラスト to increase hit rate, rely on -stock/-watermark
+                    safe_query = f"{keyword} -stock -watermark -vector -drawing -logo -text -sign -PRIME -週刊 -透かし -サンプル -Sample"
                     
                     results = ddgs.images(
                         safe_query,
